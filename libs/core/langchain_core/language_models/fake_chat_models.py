@@ -11,7 +11,6 @@ from langchain_core.callbacks import (
 from langchain_core.language_models.chat_models import BaseChatModel, SimpleChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
-from langchain_core.runnables import run_in_executor
 
 
 class FakeMessagesListChatModel(BaseChatModel):
@@ -224,7 +223,9 @@ class GenericFakeChatModel(BaseChatModel):
             content_chunks = cast(List[str], re.split(r"(\s)", content))
 
             for token in content_chunks:
-                chunk = ChatGenerationChunk(message=AIMessageChunk(content=token))
+                chunk = ChatGenerationChunk(
+                    message=AIMessageChunk(content=token, id=message.id)
+                )
                 if run_manager:
                     run_manager.on_llm_new_token(token, chunk=chunk)
                 yield chunk
@@ -241,6 +242,7 @@ class GenericFakeChatModel(BaseChatModel):
                             for fvalue_chunk in fvalue_chunks:
                                 chunk = ChatGenerationChunk(
                                     message=AIMessageChunk(
+                                        id=message.id,
                                         content="",
                                         additional_kwargs={
                                             "function_call": {fkey: fvalue_chunk}
@@ -256,6 +258,7 @@ class GenericFakeChatModel(BaseChatModel):
                         else:
                             chunk = ChatGenerationChunk(
                                 message=AIMessageChunk(
+                                    id=message.id,
                                     content="",
                                     additional_kwargs={"function_call": {fkey: fvalue}},
                                 )
@@ -269,7 +272,7 @@ class GenericFakeChatModel(BaseChatModel):
                 else:
                     chunk = ChatGenerationChunk(
                         message=AIMessageChunk(
-                            content="", additional_kwargs={key: value}
+                            id=message.id, content="", additional_kwargs={key: value}
                         )
                     )
                     if run_manager:
@@ -278,25 +281,6 @@ class GenericFakeChatModel(BaseChatModel):
                             chunk=chunk,  # No token for function call
                         )
                     yield chunk
-
-    async def _astream(
-        self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
-        **kwargs: Any,
-    ) -> AsyncIterator[ChatGenerationChunk]:
-        """Stream the output of the model."""
-        result = await run_in_executor(
-            None,
-            self._stream,
-            messages,
-            stop=stop,
-            run_manager=run_manager.get_sync() if run_manager else None,
-            **kwargs,
-        )
-        for chunk in result:
-            yield chunk
 
     @property
     def _llm_type(self) -> str:
